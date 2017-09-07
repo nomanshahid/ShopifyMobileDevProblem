@@ -13,6 +13,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.util.Objects;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -39,8 +40,7 @@ public class MainActivity extends AppCompatActivity {
             call.enqueue(new Callback() {
                 @Override
                 public void onFailure(Call call, IOException e) {
-                    Toast.makeText(getApplicationContext(), "There was an error. Please try again.",
-                            Toast.LENGTH_LONG).show();
+                    // Add toast to main thread here
                 }
 
                 @Override
@@ -49,7 +49,10 @@ public class MainActivity extends AppCompatActivity {
                         String jsonData = response.body().string();
                         try {
                             JSONObject jsonObject = new JSONObject(jsonData);
-                            Log.v("MainActivity", String.valueOf(getCustomerInfo(jsonObject, "Napolean", "Batz")));
+                            Log.v("MainActivity", "TOTAL SPENT: " +
+                                    String.valueOf(getCustomerInfo(jsonObject, "Napoleon", "Batz")));
+                            Log.v("MainActivity", "TOTAL QUANTITY: " +
+                                    String.valueOf(getProductDetails(jsonObject, "Awesome Bronze Bag")));
                         } catch (JSONException e) {
                             e.printStackTrace();
                         }
@@ -72,16 +75,37 @@ public class MainActivity extends AppCompatActivity {
 
     private double getCustomerInfo(JSONObject jsonObject, String firstName, String lastName) throws JSONException {
         double totalSpent = 0;
-        JSONArray orders = jsonObject.getJSONArray("orders"); //check for CAD and total_spent
+        JSONArray orders = jsonObject.getJSONArray("orders");
         for (int i = 0; i < orders.length(); ++i) {
             JSONObject order = orders.getJSONObject(i);
-            JSONObject customer = order.getJSONObject("customer");
-            if (customer.getString("first_name") == firstName &&
-                    customer.getString("last_name") == lastName) {
-                totalSpent += order.getDouble("total_price");
+            JSONObject customer = order.optJSONObject("customer");
+            // It seems the API returns an incorrect value for customer.total_spent ... will calculate manually
+            if (customer != null) {
+                if (Objects.equals(customer.getString("first_name"), firstName) &&
+                        Objects.equals(customer.getString("last_name"), lastName) &&
+                        Objects.equals(order.getString("currency"), "CAD")) {
+                    totalSpent += order.getDouble("total_price");
+                }
             }
         }
         return totalSpent;
+    }
+
+    private int getProductDetails(JSONObject jsonObject, String productName) throws JSONException {
+        int totalQuantity = 0;
+        JSONArray orders = jsonObject.getJSONArray("orders");
+        for (int i = 0; i < orders.length(); ++i) {
+            JSONObject order = orders.getJSONObject(i);
+            JSONArray lineItems = order.getJSONArray("line_items");
+            for (int j = 0; j < lineItems.length(); ++j) {
+                JSONObject lineItem = lineItems.getJSONObject(j);
+                if(Objects.equals(lineItem.getString("title"), productName)) {
+                    totalQuantity += lineItem.getInt("quantity");
+                }
+
+            }
+        }
+        return totalQuantity;
     }
 
     private boolean isNetworkAvailable() {
